@@ -1,99 +1,154 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
 import { logout } from './api/auth'
 import { clearToken } from './utils/token'
 
 const route = useRoute()
 const router = useRouter()
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => [route.path])
 const isPlainLayout = computed(() => route.meta.layout === 'plain')
 
-const onLogout = async () => {
-  try {
-    await logout()
-  } catch (err) {
-    ElMessage.error((err as Error).message)
-  } finally {
-    clearToken()
-    ElMessage.success('已退出登录')
-    router.replace('/login')
-  }
+const onMenuClick = (key: string | number) => {
+  router.push(String(key))
+}
+
+const onLogout = () => {
+  Modal.confirm({
+    title: '退出登录',
+    content: '确认退出当前账号？',
+    okText: '退出',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await logout()
+      } catch (err) {
+        Message.error((err as Error).message)
+      } finally {
+        clearToken()
+        Message.success('已退出登录')
+        router.replace('/login')
+      }
+    },
+  })
 }
 </script>
 
 <template>
   <router-view v-if="isPlainLayout" />
 
-  <el-container v-else :style="{ height: '100vh' }">
-    <el-header
-      :height="'48px'"
-      :style="{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 16px',
-        borderBottom: '1px solid #e4e7ed',
-      }"
-    >
-      <div :style="{ fontSize: '20px', fontWeight: 700, letterSpacing: '2px', color: '#303133' }">
-        STOCK
-      </div>
-      <el-dropdown @command="onLogout">
-        <el-avatar :size="32" />
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="logout">退出登录</el-dropdown-item>
-          </el-dropdown-menu>
+  <a-layout v-else class="app-layout">
+    <a-layout-header class="app-header">
+      <div class="app-logo">STOCK</div>
+      <a-dropdown @select="onLogout">
+        <a-avatar :size="32" class="app-avatar" />
+        <template #content>
+          <a-doption value="logout">退出登录</a-doption>
         </template>
-      </el-dropdown>
-    </el-header>
+      </a-dropdown>
+    </a-layout-header>
 
-    <el-container :style="{ flex: '1', minHeight: '0' }">
-      <el-aside width="200px">
-        <el-menu :default-active="activeMenu" router>
-          <el-menu-item index="/">
-            <template #title>库存总览</template>
-          </el-menu-item>
-          <el-menu-item index="/inbound">
-            <template #title>入库管理</template>
-          </el-menu-item>
-          <el-menu-item index="/brand">
-            <template #title>品牌管理</template>
-          </el-menu-item>
-          <el-menu-item index="/log">
-            <template #title>操作日志</template>
-          </el-menu-item>
-          <el-menu-item index="/settings">
-            <template #title>系统设置</template>
-          </el-menu-item>
-          <el-sub-menu index="permission">
+    <a-layout class="app-body">
+      <a-layout-sider :width="200" class="app-sider">
+        <a-menu :selected-keys="activeMenu" @menu-item-click="onMenuClick">
+          <a-menu-item key="/">库存总览</a-menu-item>
+          <a-menu-item key="/inbound">入库管理</a-menu-item>
+          <a-menu-item key="/brand">品牌管理</a-menu-item>
+          <a-menu-item key="/log">操作日志</a-menu-item>
+          <a-menu-item key="/settings">系统设置</a-menu-item>
+          <a-sub-menu key="permission">
             <template #title>权限管理</template>
-            <el-menu-item index="/role">
-              <template #title>角色管理</template>
-            </el-menu-item>
-            <el-menu-item index="/account">
-              <template #title>账号管理</template>
-            </el-menu-item>
-          </el-sub-menu>
-        </el-menu>
-      </el-aside>
+            <a-menu-item key="/role">角色管理</a-menu-item>
+            <a-menu-item key="/account">账号管理</a-menu-item>
+          </a-sub-menu>
+        </a-menu>
+      </a-layout-sider>
 
-      <el-container>
-        <el-main :style="{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }">
+      <a-layout class="app-main-wrap">
+        <a-layout-content class="app-content">
           <router-view v-slot="{ Component }">
-            <component
-              :is="Component"
-              :style="{ flex: '1', minHeight: '0', display: 'flex', flexDirection: 'column' }"
-            />
+            <component :is="Component" class="page-view" />
           </router-view>
-        </el-main>
+        </a-layout-content>
 
-        <el-footer>
-          <el-text type="info">Stock Frontend</el-text>
-        </el-footer>
-      </el-container>
-    </el-container>
-  </el-container>
+        <a-layout-footer class="app-footer">
+          <a-typography-text type="secondary">Stock Frontend</a-typography-text>
+        </a-layout-footer>
+      </a-layout>
+    </a-layout>
+  </a-layout>
 </template>
+
+<style scoped>
+.app-layout {
+  height: 100vh;
+}
+
+.app-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-border-2);
+  background: var(--color-bg-2);
+}
+
+.app-logo {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--color-text-1);
+}
+
+.app-avatar {
+  cursor: pointer;
+  background: var(--color-fill-3);
+  color: var(--color-text-2);
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.app-sider {
+  border-right: 1px solid var(--color-border-2);
+  background: var(--color-bg-2);
+}
+
+.app-sider :deep(.arco-menu) {
+  width: 100%;
+}
+
+.app-main-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px 16px 0;
+}
+
+.page-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+}
+</style>

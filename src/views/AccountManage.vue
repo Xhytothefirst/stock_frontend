@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import '../styles/page.css'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import type { FieldRule, FormInstance } from '@arco-design/web-vue'
+import FilterBar from '../components/FilterBar.vue'
 import {
   deleteAccount,
   getAccount,
@@ -10,10 +13,10 @@ import {
   type AccountSearchParams,
 } from '../api/account'
 import { listAllRoles } from '../api/role'
-import type { AccountRequest, AccountVO, RoleVO } from '../types/api'
+import type { AccountRequest, UserVO, RoleVO } from '../types/api'
 
 const loading = ref(false)
-const list = ref<AccountVO[]>([])
+const list = ref<UserVO[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
@@ -40,10 +43,11 @@ const form = reactive<AccountRequest>({
   roleIds: [],
 })
 
-const rules = reactive<FormRules>({
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  fullName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-})
+const rules: Record<string, FieldRule[]> = {
+  username: [{ required: true, message: '请输入用户名' }],
+  fullName: [{ required: true, message: '请输入姓名' }],
+  roleIds: [{ required: true, type: 'array', message: '请至少选择一个角色' }],
+}
 
 const resetForm = () => {
   form.username = ''
@@ -77,7 +81,7 @@ const fetchList = async () => {
     list.value = data.records
     total.value = data.total
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   } finally {
     loading.value = false
   }
@@ -87,7 +91,7 @@ const fetchRoles = async () => {
   try {
     roleOptions.value = await listAllRoles()
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   }
 }
 
@@ -110,11 +114,20 @@ const onPageChange = (p: number) => {
   void fetchList()
 }
 
-const onSizeChange = (s: number) => {
+const onPageSizeChange = (s: number) => {
   pageSize.value = s
   page.value = 1
   void fetchList()
 }
+
+const pagination = computed(() => ({
+  total: total.value,
+  current: page.value,
+  pageSize: pageSize.value,
+  showTotal: true,
+  showPageSize: true,
+  pageSizeOptions: [10, 20, 50],
+}))
 
 const openCreateDialog = () => {
   dialogMode.value = 'create'
@@ -122,7 +135,7 @@ const openCreateDialog = () => {
   dialogVisible.value = true
 }
 
-const openEditDialog = async (row: AccountVO) => {
+const openEditDialog = async (row: UserVO) => {
   dialogMode.value = 'edit'
   editingId.value = row.id
   try {
@@ -135,17 +148,16 @@ const openEditDialog = async (row: AccountVO) => {
     form.roleIds = (detail.roles ?? []).map((r) => r.id).filter((id): id is number => id !== null)
     dialogVisible.value = true
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   }
 }
 
 const submitForm = async () => {
-  if (!formRef.value) return
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
+  const errors = await formRef.value?.validate()
+  if (errors) return false
   if (dialogMode.value === 'create' && !form.password) {
-    ElMessage.warning('请输入密码')
-    return
+    Message.warning('请输入密码')
+    return false
   }
   try {
     const payload: AccountRequest = {
@@ -158,38 +170,40 @@ const submitForm = async () => {
     }
     if (dialogMode.value === 'create') {
       await saveAccount(payload)
-      ElMessage.success('新增成功')
+      Message.success('新增成功')
     } else if (editingId.value !== null) {
       await updateAccount(editingId.value, payload)
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     }
     dialogVisible.value = false
     await fetchList()
+    return true
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
+    return false
   }
 }
 
-const confirmAndDelete = async (row: AccountVO) => {
-  try {
-    await ElMessageBox.confirm(`确认删除账号「${row.username}」？`, '确认删除', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
-  try {
-    await deleteAccount(row.id as number)
-    ElMessage.success('删除成功')
-    if (list.value.length === 1 && page.value > 1) {
-      page.value -= 1
-    }
-    await fetchList()
-  } catch (err) {
-    ElMessage.error((err as Error).message)
-  }
+const confirmAndDelete = (row: UserVO) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确认删除账号「${row.username}」？`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      try {
+        await deleteAccount(row.id as number)
+        Message.success('删除成功')
+        if (list.value.length === 1 && page.value > 1) {
+          page.value -= 1
+        }
+        await fetchList()
+      } catch (err) {
+        Message.error((err as Error).message)
+      }
+    },
+  })
 }
 
 onMounted(() => {
@@ -199,171 +213,166 @@ onMounted(() => {
 </script>
 
 <template>
-  <div :style="{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }">
-    <el-page-header title="返回" content="账号管理">
-      <template #content>
-        <span><strong>账号管理</strong></span>
+  <div class="page">
+    <div class="page-head">
+      <div class="page-title">账号管理</div>
+      <div class="page-subtitle">维护登录账号及其角色</div>
+    </div>
+
+    <FilterBar>
+      <a-input
+        v-model="searchUsername"
+        class="filter-item"
+        placeholder="用户名"
+        allow-clear
+        @keyup.enter="onSearch"
+      />
+      <a-input
+        v-model="searchFullName"
+        class="filter-item"
+        placeholder="姓名"
+        allow-clear
+        @keyup.enter="onSearch"
+      />
+      <a-select v-model="searchRoleId" class="filter-item" placeholder="角色" allow-clear allow-search>
+        <a-option
+          v-for="role in roleOptions"
+          :key="role.id ?? ''"
+          :label="role.name ?? ''"
+          :value="role.id ?? 0"
+        />
+      </a-select>
+      <a-select v-model="searchEnabled" class="filter-item" placeholder="状态" allow-clear>
+        <a-option label="启用" :value="true" />
+        <a-option label="停用" :value="false" />
+      </a-select>
+      <template #actions>
+        <a-button type="primary" @click="onSearch">查询</a-button>
+        <a-button @click="onReset">重置</a-button>
       </template>
-    </el-page-header>
-    <el-text type="info">维护登录账号及其角色</el-text>
-
-    <el-divider />
-
-    <el-row :gutter="16" align="middle">
-      <el-col :span="5">
-        <el-input v-model="searchUsername" placeholder="用户名" clearable @keyup.enter="onSearch" />
-      </el-col>
-      <el-col :span="5">
-        <el-input v-model="searchFullName" placeholder="姓名" clearable @keyup.enter="onSearch" />
-      </el-col>
-      <el-col :span="5">
-        <el-select v-model="searchRoleId" placeholder="角色" clearable style="width: 100%">
-          <el-option
-            v-for="role in roleOptions"
-            :key="(role.id as number)"
-            :label="(role.name as string)"
-            :value="(role.id as number)"
-          />
-        </el-select>
-      </el-col>
-      <el-col :span="4">
-        <el-select v-model="searchEnabled" placeholder="状态" clearable style="width: 100%">
-          <el-option :label="'启用'" :value="true" />
-          <el-option :label="'停用'" :value="false" />
-        </el-select>
-      </el-col>
-      <el-col :span="5" :style="{ display: 'flex', gap: '8px' }">
-        <el-button type="primary" @click="onSearch">查询</el-button>
-        <el-button @click="onReset">重置</el-button>
-      </el-col>
-    </el-row>
+    </FilterBar>
 
     <div class="batch-toolbar">
-      <el-button type="primary" style="margin-left: auto" @click="openCreateDialog">
-        + 新增账号
-      </el-button>
+      <a-button type="primary" class="create-btn" @click="openCreateDialog">+ 新增账号</a-button>
     </div>
 
-    <div :style="{ flex: 1, minHeight: 0, marginTop: '16px', display: 'flex', flexDirection: 'column' }">
-      <el-table
-        v-loading="loading"
+    <div class="table-wrap">
+      <a-table
         :data="list"
+        :loading="loading"
         :stripe="true"
-        border
-        height="100%"
-        empty-text="暂无账号"
+        :bordered="{ cell: true }"
+        :pagination="pagination"
+        row-key="id"
+        :scroll="{ x: '100%', minWidth: 900 }"
+        no-data-element="暂无账号"
+        @page-change="onPageChange"
+        @page-size-change="onPageSizeChange"
       >
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="username" label="用户名" min-width="120" />
-        <el-table-column prop="fullName" label="姓名" min-width="120" />
-        <el-table-column label="角色" min-width="180">
-          <template #default="{ row }">
-            <template v-if="((row as AccountVO).roles ?? []).length > 0">
-              <el-tag
-                v-for="role in (row as AccountVO).roles"
-                :key="(role.id as number)"
-                type="info"
-                style="margin-right: 4px"
-              >
-                {{ role.name }}
-              </el-tag>
+        <template #columns>
+          <a-table-column title="ID" data-index="id" :width="80" />
+          <a-table-column title="用户名" data-index="username" :min-width="120" ellipsis tooltip />
+          <a-table-column title="姓名" data-index="fullName" :min-width="120" ellipsis tooltip />
+          <a-table-column title="角色" :min-width="180">
+            <template #cell="{ record }">
+              <template v-if="((record as UserVO).roles ?? []).length > 0">
+                <a-tag v-for="role in (record as UserVO).roles" :key="role.id ?? ''" color="gray">
+                  {{ role.name }}
+                </a-tag>
+              </template>
+              <span v-else>—</span>
             </template>
-            <span v-else>—</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="email" label="邮箱" min-width="180">
-          <template #default="{ row }">
-            <span>{{ (row as AccountVO).email || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="90">
-          <template #default="{ row }">
-            <el-tag :type="(row as AccountVO).enabled ? 'success' : 'danger'">
-              {{ (row as AccountVO).enabled ? '启用' : '停用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="创建时间" width="160">
-          <template #default="{ row }">
-            <span>{{ (row as AccountVO).createTime ?? '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openEditDialog(row as AccountVO)">编辑</el-button>
-            <el-button link type="danger" @click="confirmAndDelete(row as AccountVO)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          </a-table-column>
+          <a-table-column title="邮箱" :min-width="180">
+            <template #cell="{ record }">{{ (record as UserVO).email || '—' }}</template>
+          </a-table-column>
+          <a-table-column title="状态" :width="90">
+            <template #cell="{ record }">
+              <a-tag :color="(record as UserVO).enabled ? 'green' : 'red'">
+                {{ (record as UserVO).enabled ? '启用' : '停用' }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="创建时间" :width="160">
+            <template #cell="{ record }">{{ (record as UserVO).createTime ?? '—' }}</template>
+          </a-table-column>
+          <a-table-column title="操作" :width="140" fixed="right">
+            <template #cell="{ record }">
+              <a-space :size="4">
+                <a-button
+                  type="text"
+                  size="small"
+                  :disabled="!(record as UserVO).modifiable"
+                  @click="openEditDialog(record as UserVO)"
+                >
+                  编辑
+                </a-button>
+                <a-button
+                  type="text"
+                  status="danger"
+                  size="small"
+                  :disabled="!(record as UserVO).modifiable"
+                  @click="confirmAndDelete(record as UserVO)"
+                >
+                  删除
+                </a-button>
+              </a-space>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
     </div>
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :total="total"
-      :page-sizes="[10, 20, 50]"
-      layout="total, sizes, prev, pager, next, jumper"
-      background
-      style="margin-top: 12px; justify-content: flex-end; display: flex"
-      @current-change="onPageChange"
-      @size-change="onSizeChange"
-    />
-
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="dialogMode === 'create' ? '新增账号' : '编辑账号'"
-      width="520px"
+      :width="520"
+      :mask-closable="false"
+      unmount-on-close
+      @before-ok="submitForm"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" placeholder="登录用户名" maxlength="255" show-word-limit />
-        </el-form-item>
-        <el-form-item label="姓名" prop="fullName">
-          <el-input v-model="form.fullName" maxlength="255" show-word-limit />
-        </el-form-item>
-        <el-form-item label="密码" prop="password">
-          <el-input
+      <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
+        <a-form-item label="用户名" field="username">
+          <a-input v-model="form.username" placeholder="登录用户名" :max-length="255" show-word-limit />
+        </a-form-item>
+        <a-form-item label="姓名" field="fullName">
+          <a-input v-model="form.fullName" placeholder="请输入姓名" :max-length="255" show-word-limit />
+        </a-form-item>
+        <a-form-item label="密码" field="password">
+          <a-input-password
             v-model="form.password"
-            type="password"
-            show-password
             :placeholder="dialogMode === 'edit' ? '留空表示不修改密码' : '请输入密码'"
           />
-        </el-form-item>
-        <el-form-item label="邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="可选" />
-        </el-form-item>
-        <el-form-item label="状态" prop="enabled">
-          <el-switch v-model="form.enabled" />
-        </el-form-item>
-        <el-form-item label="角色" prop="roleIds">
-          <el-select
-            v-model="form.roleIds"
-            multiple
-            placeholder="可多选"
-            style="width: 100%"
-          >
-            <el-option
+        </a-form-item>
+        <a-form-item label="邮箱" field="email">
+          <a-input :model-value="form.email ?? ''" placeholder="可选" @update:model-value="form.email = $event || null" />
+        </a-form-item>
+        <a-form-item label="状态" field="enabled">
+          <a-switch v-model="form.enabled" />
+        </a-form-item>
+        <a-form-item label="角色" field="roleIds">
+          <a-select v-model="form.roleIds" multiple placeholder="可多选" allow-clear>
+            <a-option
               v-for="role in roleOptions"
-              :key="(role.id as number)"
-              :label="(role.name as string)"
-              :value="(role.id as number)"
+              :key="role.id ?? ''"
+              :label="role.name ?? ''"
+              :value="role.id ?? 0"
             />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm">提交</el-button>
-      </template>
-    </el-dialog>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <style scoped>
-.batch-toolbar {
+.create-btn {
+  margin-left: auto;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
   margin-top: 16px;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
 }
 </style>

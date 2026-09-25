@@ -106,6 +106,14 @@ export interface LoginRequest {
   rememberMe: boolean
 }
 
+export interface RegisterRequest {
+  username: string
+  fullName: string
+  password: string
+  email: string
+  captcha: string
+}
+
 export interface PasswordUpdateRequest {
   captcha: string
   newPassword: string
@@ -138,13 +146,15 @@ export interface RoleRequest {
   permissionIds: number[]
 }
 
-export interface AccountVO {
+export interface UserVO {
   id: number | null
   username: string | null
   fullName: string | null
   email: string | null
   enabled: boolean | null
   roles: RoleVO[] | null
+  /** 当前登录用户是否可修改该账号；自己的账号恒为 false */
+  modifiable: boolean
   createTime: string | null
   updateTime: string | null
 }

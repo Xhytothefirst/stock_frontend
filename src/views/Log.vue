@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import '../styles/page.css'
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
+import FilterBar from '../components/FilterBar.vue'
 import { searchLogs, undoLog, type LogSearchParams } from '../api/operationLog'
 import { getOperationTypes } from '../api/enum'
 import type { EnumOption, OperationLogVO } from '../types/api'
@@ -20,13 +22,13 @@ const operationTypeMap = computed(() => {
 
 const codeKeyword = ref<string>('')
 const nameKeyword = ref<string>('')
-const typeFilter = ref<number | null>(null)
+const typeFilter = ref<number | undefined>(undefined)
 const searchTimer = ref<number | null>(null)
 
-const typeTagType = (code: number): 'primary' | 'success' | 'danger' => {
-  if (code === 1) return 'primary'
-  if (code === 2) return 'success'
-  return 'danger'
+const typeTagColor = (code: number): string => {
+  if (code === 1) return 'arcoblue'
+  if (code === 2) return 'green'
+  return 'red'
 }
 
 const fetchEnums = async () => {
@@ -48,7 +50,7 @@ const fetchList = async () => {
     list.value = data.records
     total.value = data.total
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   } finally {
     loading.value = false
   }
@@ -69,16 +71,33 @@ const onTypeChange = () => {
   void fetchList()
 }
 
+const onResetFilters = () => {
+  codeKeyword.value = ''
+  nameKeyword.value = ''
+  typeFilter.value = undefined
+  page.value = 1
+  void fetchList()
+}
+
 const onPageChange = (p: number) => {
   page.value = p
   void fetchList()
 }
 
-const onSizeChange = (s: number) => {
+const onPageSizeChange = (s: number) => {
   pageSize.value = s
   page.value = 1
   void fetchList()
 }
+
+const pagination = computed(() => ({
+  total: total.value,
+  current: page.value,
+  pageSize: pageSize.value,
+  showTotal: true,
+  showPageSize: true,
+  pageSizeOptions: [10, 20, 50],
+}))
 
 const refresh = () => {
   void fetchList()
@@ -109,28 +128,21 @@ const undoLabel = (row: OperationLogVO): string => {
 const handleUndo = async (row: OperationLogVO) => {
   try {
     await undoLog(row.id)
-    ElMessage.success('已撤回')
+    Message.success('已撤回')
     await fetchList()
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   }
 }
 
-const confirmAndUndo = async (row: OperationLogVO) => {
-  try {
-    await ElMessageBox.confirm(
-      '此操作将还原该日志对应的影响（如恢复已售状态、恢复已删除记录）',
-      '确认撤回该操作？',
-      {
-        confirmButtonText: '撤回',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
-  }
-  await handleUndo(row)
+const confirmAndUndo = (row: OperationLogVO) => {
+  Modal.confirm({
+    title: '确认撤回该操作？',
+    content: '此操作将还原该日志对应的影响（如恢复已售状态、恢复已删除记录）',
+    okText: '撤回',
+    cancelText: '取消',
+    onOk: () => handleUndo(row),
+  })
 }
 
 onMounted(async () => {
@@ -140,153 +152,145 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div :style="{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }">
-    <el-page-header title="返回" content="操作日志">
-      <template #content>
-        <span><strong>操作日志</strong></span>
-      </template>
-    </el-page-header>
-    <el-text type="info">保留删除记录，并支持撤回误删</el-text>
-
-    <el-divider />
-
-    <el-row :gutter="16" align="middle">
-      <el-col :span="6">
-        <el-input
-          v-model="codeKeyword"
-          placeholder="搜索货号"
-          clearable
-          @input="onSearchInput"
-          @clear="onSearchInput"
-        />
-      </el-col>
-      <el-col :span="6">
-        <el-input
-          v-model="nameKeyword"
-          placeholder="搜索鞋款"
-          clearable
-          @input="onSearchInput"
-          @clear="onSearchInput"
-        />
-      </el-col>
-      <el-col :span="4">
-        <el-select
-          v-model="typeFilter"
-          placeholder="操作类型"
-          clearable
-          @change="onTypeChange"
-        >
-          <el-option
-            v-for="opt in operationTypes"
-            :key="opt.code"
-            :label="opt.name"
-            :value="opt.code"
-          />
-        </el-select>
-      </el-col>
-      <el-col :span="8" style="text-align: right">
-        <el-button @click="refresh">刷新</el-button>
-      </el-col>
-    </el-row>
-
-    <div :style="{ flex: 1, minHeight: 0, marginTop: '16px', display: 'flex', flexDirection: 'column' }">
-      <el-table
-        v-loading="loading"
-        :data="list"
-        :stripe="true"
-        border
-        height="100%"
-        empty-text="暂无操作日志"
-      >
-      <el-table-column label="操作时间" width="140">
-        <template #default="{ row }">
-          <span>{{ operationTimeText(row as OperationLogVO) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作类型" width="120">
-        <template #default="{ row }">
-          <el-tag
-            v-if="(row as OperationLogVO).operationType !== null && (row as OperationLogVO).operationType !== undefined"
-            :type="typeTagType((row as OperationLogVO).operationType)"
-            effect="plain"
-            size="small"
-          >
-            {{ operationTypeMap.get((row as OperationLogVO).operationType) ?? '—' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="鞋款" min-width="220">
-        <template #default="{ row }">
-          <div><strong>{{ (row as OperationLogVO).productName ?? '—' }}</strong></div>
-        </template>
-      </el-table-column>
-      <el-table-column label="货号 / 尺码" min-width="200">
-        <template #default="{ row }">
-          <span>
-            {{ (row as OperationLogVO).productCode ?? '—' }}
-            <template v-if="(row as OperationLogVO).productSize">
-              · {{ (row as OperationLogVO).productSize }} 码
-            </template>
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="成本" width="140">
-        <template #default="{ row }">
-          <span v-if="(row as OperationLogVO).productPurchasePrice !== null && (row as OperationLogVO).productPurchasePrice !== undefined">
-            {{ formatMoney((row as OperationLogVO).productPurchasePrice) }}
-          </span>
-          <span v-else>—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="售价" width="140">
-        <template #default="{ row }">
-          <span v-if="(row as OperationLogVO).productSalePrice !== null && (row as OperationLogVO).productSalePrice !== undefined">
-            {{ formatMoney((row as OperationLogVO).productSalePrice) }}
-          </span>
-          <span v-else>—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="数量" width="100">
-        <template #default="{ row }">
-          <span v-if="(row as OperationLogVO).productNumber !== null && (row as OperationLogVO).productNumber !== undefined">
-            {{ (row as OperationLogVO).productNumber }} 双
-          </span>
-          <span v-else>—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="利润" width="120">
-        <template #default="{ row }">
-          <span v-if="profitOf(row as OperationLogVO) !== null">
-            {{ formatMoney(profitOf(row as OperationLogVO)) }}
-          </span>
-          <span v-else>—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            :disabled="!canUndo(row as OperationLogVO)"
-            @click="confirmAndUndo(row as OperationLogVO)"
-          >
-            {{ undoLabel(row as OperationLogVO) || '—' }}
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+  <div class="page">
+    <div class="page-head">
+      <div class="page-title">操作日志</div>
+      <div class="page-subtitle">保留删除记录，并支持撤回误删</div>
     </div>
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :total="total"
-      :page-sizes="[10, 20, 50]"
-      layout="total, sizes, prev, pager, next, jumper"
-      background
-      style="margin-top: 12px; justify-content: flex-end; display: flex"
-      @current-change="onPageChange"
-      @size-change="onSizeChange"
-    />
+    <FilterBar>
+      <a-input
+        v-model="codeKeyword"
+        class="filter-item"
+        placeholder="搜索货号"
+        allow-clear
+        @input="onSearchInput"
+        @clear="onSearchInput"
+      />
+      <a-input
+        v-model="nameKeyword"
+        class="filter-item"
+        placeholder="搜索鞋款"
+        allow-clear
+        @input="onSearchInput"
+        @clear="onSearchInput"
+      />
+      <a-select
+        v-model="typeFilter"
+        class="filter-item"
+        placeholder="操作类型"
+        allow-clear
+        @change="onTypeChange"
+      >
+        <a-option v-for="opt in operationTypes" :key="opt.code" :label="opt.name" :value="opt.code" />
+      </a-select>
+      <template #actions>
+        <a-button @click="onResetFilters">重置</a-button>
+        <a-button type="primary" @click="refresh">刷新</a-button>
+      </template>
+    </FilterBar>
+
+    <div class="table-wrap">
+      <a-table
+        :data="list"
+        :loading="loading"
+        :stripe="true"
+        :bordered="{ cell: true }"
+        :pagination="pagination"
+        row-key="id"
+        :scroll="{ x: '100%', minWidth: 1100 }"
+        no-data-element="暂无操作日志"
+        @page-change="onPageChange"
+        @page-size-change="onPageSizeChange"
+      >
+        <template #columns>
+          <a-table-column title="操作时间" :width="140">
+            <template #cell="{ record }">{{ operationTimeText(record as OperationLogVO) }}</template>
+          </a-table-column>
+          <a-table-column title="操作类型" :width="120">
+            <template #cell="{ record }">
+              <a-tag
+                v-if="(record as OperationLogVO).operationType !== null && (record as OperationLogVO).operationType !== undefined"
+                :color="typeTagColor((record as OperationLogVO).operationType)"
+                size="small"
+              >
+                {{ operationTypeMap.get((record as OperationLogVO).operationType) ?? '—' }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="鞋款" :min-width="220">
+            <template #cell="{ record }">
+              <span class="product-name">{{ (record as OperationLogVO).productName ?? '—' }}</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="货号 / 尺码" :min-width="200">
+            <template #cell="{ record }">
+              <span>
+                {{ (record as OperationLogVO).productCode ?? '—' }}
+                <template v-if="(record as OperationLogVO).productSize">
+                  · {{ (record as OperationLogVO).productSize }} 码
+                </template>
+              </span>
+            </template>
+          </a-table-column>
+          <a-table-column title="成本" :width="140">
+            <template #cell="{ record }">
+              <span v-if="(record as OperationLogVO).productPurchasePrice !== null && (record as OperationLogVO).productPurchasePrice !== undefined">
+                {{ formatMoney((record as OperationLogVO).productPurchasePrice) }}
+              </span>
+              <span v-else>—</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="售价" :width="140">
+            <template #cell="{ record }">
+              <span v-if="(record as OperationLogVO).productSalePrice !== null && (record as OperationLogVO).productSalePrice !== undefined">
+                {{ formatMoney((record as OperationLogVO).productSalePrice) }}
+              </span>
+              <span v-else>—</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="数量" :width="100">
+            <template #cell="{ record }">
+              <span v-if="(record as OperationLogVO).productNumber !== null && (record as OperationLogVO).productNumber !== undefined">
+                {{ (record as OperationLogVO).productNumber }} 双
+              </span>
+              <span v-else>—</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="利润" :width="120">
+            <template #cell="{ record }">
+              <span v-if="profitOf(record as OperationLogVO) !== null">
+                {{ formatMoney(profitOf(record as OperationLogVO)) }}
+              </span>
+              <span v-else>—</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="操作" :width="140" fixed="right">
+            <template #cell="{ record }">
+              <a-button
+                type="text"
+                size="small"
+                :disabled="!canUndo(record as OperationLogVO)"
+                @click="confirmAndUndo(record as OperationLogVO)"
+              >
+                {{ undoLabel(record as OperationLogVO) || '—' }}
+              </a-button>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  margin-top: 16px;
+}
+
+.product-name {
+  font-weight: 600;
+}
+</style>

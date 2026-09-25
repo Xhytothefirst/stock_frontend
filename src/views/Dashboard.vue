@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import { VueUiDonut, VueUiQuickChart } from 'vue-data-ui'
 import type { VueUiDonutConfig, VueUiQuickChartConfig } from 'vue-data-ui'
 import {
@@ -31,6 +31,9 @@ const loadingWarn = ref(false)
 const loadingDistribution = ref(false)
 const globalError = ref<string>('')
 
+// Arco 色板
+const palette = ['#165DFF', '#00B42A', '#FF7D00', '#F53F3F', '#86909C', '#C9CDD4']
+
 const distributionDataset = computed(() =>
   distribution.value.map((d) => ({
     name: d.priceLevel,
@@ -42,11 +45,11 @@ const distributionConfig = ref<VueUiDonutConfig>({
   pie: false,
   responsive: true,
   theme: '',
-  customPalette: ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#C0C4CC'],
+  customPalette: palette,
   userOptions: { show: false },
   style: {
     chart: {
-      title: { text: '', color: '#303133' },
+      title: { text: '', color: 'var(--color-text-1)' },
       legend: { show: true, position: 'top' },
       tooltip: { show: true },
       backgroundColor: 'transparent',
@@ -120,9 +123,9 @@ const trendConfigs = computed(() => {
   const days = trend.value?.dataOfDay?.length ?? 0
   const modulo = days > 7 ? 6 : 7
   return {
-    purchase: buildLineConfig('#409EFF', labels, modulo),
-    sale: buildLineConfig('#67C23A', labels, modulo),
-    profit: buildLineConfig('#E6A23C', labels, modulo),
+    purchase: buildLineConfig(palette[0], labels, modulo),
+    sale: buildLineConfig(palette[1], labels, modulo),
+    profit: buildLineConfig(palette[2], labels, modulo),
   }
 })
 
@@ -131,6 +134,7 @@ const metrics = computed(() => [
     title: '当前库存',
     numeric: Number(summary.value?.totalProductCount ?? 0),
     prefix: '',
+    precision: 0,
     hint: '可售库存',
   },
   {
@@ -144,6 +148,7 @@ const metrics = computed(() => [
     title: '今日入库',
     numeric: Number(todayTrend.value?.totalProductCount ?? 0),
     prefix: '',
+    precision: 0,
     hint: '今日新录入（含累计至今日）',
   },
   {
@@ -222,7 +227,7 @@ const fetchTrend = async (day: TrendDay) => {
     const data = await getTrend(day)
     trend.value = data
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   } finally {
     loadingTrend.value = false
   }
@@ -233,7 +238,7 @@ const fetchTodayTrend = async () => {
     const data = await getTrend(0)
     todayTrend.value = data
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   }
 }
 
@@ -243,7 +248,7 @@ const fetchWarn = async () => {
     const data = await getWarn()
     warn.value = data
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   } finally {
     loadingWarn.value = false
   }
@@ -255,7 +260,7 @@ const fetchDistribution = async () => {
     const data = await getDistribution()
     distribution.value = data
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   } finally {
     loadingDistribution.value = false
   }
@@ -278,151 +283,259 @@ watch(activeTrend, (value) => {
 </script>
 
 <template>
-  <el-container direction="vertical" :style="{ gap: '16px', height: '100%' }">
-    <el-alert
-      v-if="globalError"
-      :title="globalError"
-      type="error"
-      show-icon
-      closable
-      :style="{ flex: '0 0 auto' }"
-      @close="globalError = ''"
-    />
+  <div class="dashboard">
+    <a-alert v-if="globalError" type="error" show-icon closable @close="globalError = ''">
+      {{ globalError }}
+    </a-alert>
 
-    <el-row :gutter="12" v-loading="loadingSummary" :style="{ flex: '0 0 auto' }">
-      <el-col v-for="item in metrics" :key="item.title" :span="6" :style="{ height: '100%' }">
-        <el-card
-          shadow="hover"
-          :body-style="{ padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }"
-          :style="{ height: '100%' }"
-        >
-          <div>{{ item.title }}</div>
-          <el-statistic :value="item.numeric" :prefix="item.prefix" :precision="item.precision" :value-style="{ fontSize: '22px' }" />
-          <el-text type="success" size="small">{{ item.hint }}</el-text>
-        </el-card>
-      </el-col>
-    </el-row>
+    <a-spin :loading="loadingSummary" class="block">
+      <div class="metric-grid">
+        <a-card v-for="item in metrics" :key="item.title" hoverable class="metric-card">
+          <div class="metric-title">{{ item.title }}</div>
+          <a-statistic
+            :value="item.numeric"
+            :prefix="item.prefix || undefined"
+            :precision="item.precision"
+            :value-style="{ fontSize: '22px' }"
+          />
+          <div class="metric-hint">{{ item.hint }}</div>
+        </a-card>
+      </div>
+    </a-spin>
 
-    <el-card
-      :body-style="{ padding: '8px 16px', display: 'flex', alignItems: 'center' }"
-      :style="{ flex: '0 0 auto' }"
-    >
-      <el-row justify="space-between" align="middle" :style="{ width: '100%' }">
-        <el-col :span="12">
-          <strong>开始入库</strong>
-          <el-text type="info" size="small">新增球鞋、成本、尺码和库位</el-text>
-        </el-col>
-        <el-col :span="12" :style="{ textAlign: 'right' }">
-          <el-button type="primary" plain @click="$router.push('/inbound')">立即入库</el-button>
-        </el-col>
-      </el-row>
-    </el-card>
+    <a-card class="block entry-card" :bordered="false">
+      <div class="entry-row">
+        <div>
+          <div class="entry-title">开始入库</div>
+          <div class="entry-hint">新增球鞋、成本、尺码和库位</div>
+        </div>
+        <a-button type="primary" status="normal" @click="$router.push('/inbound')">
+          立即入库
+        </a-button>
+      </div>
+    </a-card>
 
-    <el-row :gutter="12" :style="{ flex: 1, minHeight: 0 }">
-      <el-col :span="16" :style="{ height: '100%' }">
-        <el-card
-          v-loading="loadingTrend"
-          :header-style="{ padding: '8px 12px' }"
-          :body-style="{ padding: '12px', display: 'flex', flexDirection: 'column' }"
-          :style="{ height: '100%' }"
-        >
-          <template #header>
-            <el-row justify="space-between" align="middle">
-              <el-col>
-                <strong>经营趋势</strong>
-                <el-text type="info" size="small">近{{ activeTrend }}天入库、售出与利润分别展示</el-text>
-              </el-col>
-              <el-col>
-                <el-radio-group v-model="activeTrend" size="small">
-                  <el-radio-button :value="7">7天</el-radio-button>
-                  <el-radio-button :value="30">30天</el-radio-button>
-                  <el-radio-button :value="90">90天</el-radio-button>
-                </el-radio-group>
-              </el-col>
-            </el-row>
-          </template>
-
-          <el-row :gutter="12" :style="{ flex: 1, minHeight: 0 }">
-            <el-col v-for="item in trendMetrics" :key="item.title" :span="8" :style="{ height: '100%' }">
-              <el-card
-                shadow="never"
-                :header-style="{ padding: '6px 10px' }"
-                :body-style="{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }"
-                :style="{ height: '100%' }"
-              >
-                <template #header>
-                  <el-row justify="space-between" align="middle">
-                    <el-col><strong>{{ item.title }}</strong></el-col>
-                    <el-col>
-                      <el-space :size="6" align="center">
-                        <el-tag v-if="item.tag === 'down'" type="info" effect="plain">↓</el-tag>
-                        <el-tag v-else-if="item.tag === 'up'" type="success" effect="plain">↑</el-tag>
-                        <el-tag v-else type="warning" effect="plain">¥</el-tag>
-                        <span :style="{ fontSize: '14px', fontWeight: 600 }">{{ item.display }}</span>
-                      </el-space>
-                    </el-col>
-                  </el-row>
-                </template>
-                <div :style="{ height: '150px', marginTop: 'auto' }">
-                  <VueUiQuickChart
-                    v-if="item.hasData"
-                    :config="item.config"
-                    :dataset="item.dataset"
-                  />
-                  <el-empty v-else :image-size="40" description="暂无数据" />
+    <div class="trend-row">
+      <a-card class="trend-card" :bordered="false">
+        <template #title>
+          <div class="card-title-row">
+            <div>
+              <span class="card-title">经营趋势</span>
+              <span class="card-subtitle">近{{ activeTrend }}天入库、售出与利润分别展示</span>
+            </div>
+            <a-radio-group v-model="activeTrend" type="button" size="small">
+              <a-radio :value="7">7天</a-radio>
+              <a-radio :value="30">30天</a-radio>
+              <a-radio :value="90">90天</a-radio>
+            </a-radio-group>
+          </div>
+        </template>
+        <a-spin :loading="loadingTrend" class="trend-spin">
+          <div class="trend-grid">
+            <a-card v-for="item in trendMetrics" :key="item.title" class="trend-item">
+              <template #title>
+                <div class="trend-item-head">
+                  <span class="trend-item-title">{{ item.title }}</span>
+                  <a-space :size="6">
+                    <a-tag v-if="item.tag === 'down'" color="gray">↓</a-tag>
+                    <a-tag v-else-if="item.tag === 'up'" color="green">↑</a-tag>
+                    <a-tag v-else color="orange">¥</a-tag>
+                    <span class="trend-item-value">{{ item.display }}</span>
+                  </a-space>
                 </div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </el-card>
-      </el-col>
+              </template>
+              <div class="trend-chart">
+                <VueUiQuickChart v-if="item.hasData" :config="item.config" :dataset="item.dataset" />
+                <a-empty v-else description="暂无数据" />
+              </div>
+            </a-card>
+          </div>
+        </a-spin>
+      </a-card>
 
-      <el-col :span="8" :style="{ height: '100%' }">
-        <el-card
-          v-loading="loadingDistribution"
-          :header-style="{ padding: '8px 12px' }"
-          :body-style="{ padding: '12px', display: 'flex', alignItems: 'stretch', flexDirection: 'column' }"
-          :style="{ height: '100%' }"
-        >
-          <template #header><strong>成本价位分布</strong></template>
-          <div :style="{ flex: 1, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+      <a-card class="distribution-card" :bordered="false" title="成本价位分布">
+        <a-spin :loading="loadingDistribution" class="distribution-spin">
+          <div class="distribution-body">
             <VueUiDonut
               v-if="distributionDataset.length > 0"
               :config="distributionConfig"
               :dataset="distributionDataset"
             />
-            <el-empty v-else description="暂无分布数据" :image-size="60" />
+            <a-empty v-else description="暂无分布数据" />
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </a-spin>
+      </a-card>
+    </div>
 
-    <el-card
-      v-loading="loadingWarn"
-      :header-style="{ padding: '8px 12px' }"
-      :body-style="{ padding: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }"
-      :style="{ flex: '0 0 auto' }"
-    >
-      <template #header>
-        <el-row justify="space-between" align="middle">
-          <el-col><strong>库龄预警</strong></el-col>
-          <el-col>
-            <el-tag type="danger" effect="plain">
-              超期 {{ warn?.overNinetyDayCount ?? 0 }} 双
-            </el-tag>
-          </el-col>
-        </el-row>
+    <a-card class="block" :bordered="false">
+      <template #title>
+        <div class="card-title-row">
+          <span class="card-title">库龄预警</span>
+          <a-tag color="red">超期 {{ warn?.overNinetyDayCount ?? 0 }} 双</a-tag>
+        </div>
       </template>
-      <el-descriptions :column="4" border>
-        <el-descriptions-item
-          v-for="bucket in warnBuckets"
-          :key="bucket.label"
-          :label="bucket.label"
-          :label-style="{ padding: '4px 8px' }"
-        >
-          {{ bucket.count }} 双
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-  </el-container>
+      <a-spin :loading="loadingWarn">
+        <a-descriptions :column="4" bordered>
+          <a-descriptions-item v-for="bucket in warnBuckets" :key="bucket.label" :label="bucket.label">
+            {{ bucket.count }} 双
+          </a-descriptions-item>
+        </a-descriptions>
+      </a-spin>
+    </a-card>
+  </div>
 </template>
+
+<style scoped>
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.block {
+  flex: none;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.metric-card :deep(.arco-card-body) {
+  padding: 12px 16px;
+}
+
+.metric-title {
+  color: var(--color-text-2);
+  font-size: 13px;
+}
+
+.metric-hint {
+  color: var(--color-success);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.entry-card :deep(.arco-card-body) {
+  padding: 14px 16px;
+}
+
+.entry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.entry-title {
+  font-weight: 600;
+}
+
+.entry-hint {
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.trend-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+}
+
+.trend-card {
+  flex: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.trend-card :deep(.arco-card-body) {
+  flex: 1;
+  min-height: 0;
+}
+
+.distribution-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.distribution-card :deep(.arco-card-body) {
+  flex: 1;
+  min-height: 0;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.card-subtitle {
+  margin-left: 8px;
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.trend-spin,
+.distribution-spin {
+  display: block;
+  width: 100%;
+}
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.trend-item :deep(.arco-card-header) {
+  padding: 8px 12px 0;
+  border: none;
+}
+
+.trend-item :deep(.arco-card-body) {
+  padding: 8px 12px 12px;
+}
+
+.trend-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.trend-item-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.trend-item-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trend-chart {
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.distribution-body {
+  height: 100%;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+</style>

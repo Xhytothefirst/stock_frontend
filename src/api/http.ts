@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import router from '../router'
 import type { Result } from '../types/api'
 import { clearToken, getToken } from '../utils/token'
@@ -24,7 +24,7 @@ http.interceptors.response.use(
       if (body.code === 401) {
         // token 过期/无效：清空 token + 提示 + 跳登录页
         clearToken()
-        ElMessage.warning('登录已过期，请重新登录')
+        Message.warning('登录已过期，请重新登录')
         router.replace('/login')
         return Promise.reject(new Error(body.msg || '认证失败'))
       }

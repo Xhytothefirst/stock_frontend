@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import '../styles/page.css'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import type { FieldRule, FormInstance } from '@arco-design/web-vue'
+import FilterBar from '../components/FilterBar.vue'
 import {
   batchDeleteBrands,
   deleteBrand,
@@ -14,13 +17,18 @@ import type { BrandRequest, BrandVO } from '../types/api'
 
 const loading = ref(false)
 const list = ref<BrandVO[]>([])
-const selectedRows = ref<BrandVO[]>([])
+const selectedKeys = ref<number[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
 
 const searchKeyword = ref<string>('')
 const searchTimer = ref<number | null>(null)
+
+const rowSelection = computed(() => ({
+  type: 'checkbox' as const,
+  showCheckedAll: true,
+}))
 
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -30,8 +38,8 @@ const form = reactive<BrandRequest>({
   name: '',
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入品牌名称', trigger: 'blur' }],
+const rules: Record<string, FieldRule[]> = {
+  name: [{ required: true, message: '请输入品牌名称' }],
 }
 
 const resetForm = () => {
@@ -59,7 +67,7 @@ const fetchList = async () => {
     list.value = data.records
     total.value = data.total
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   } finally {
     loading.value = false
   }
@@ -75,16 +83,31 @@ const onSearchInput = () => {
   }, 300)
 }
 
+const onResetFilters = () => {
+  searchKeyword.value = ''
+  page.value = 1
+  void fetchList()
+}
+
 const onPageChange = (p: number) => {
   page.value = p
   void fetchList()
 }
 
-const onSizeChange = (s: number) => {
+const onPageSizeChange = (s: number) => {
   pageSize.value = s
   page.value = 1
   void fetchList()
 }
+
+const pagination = computed(() => ({
+  total: total.value,
+  current: page.value,
+  pageSize: pageSize.value,
+  showTotal: true,
+  showPageSize: true,
+  pageSizeOptions: [10, 20, 50],
+}))
 
 const openCreateDialog = () => {
   dialogMode.value = 'create'
@@ -100,92 +123,81 @@ const openEditDialog = async (row: BrandVO) => {
     form.name = detail.name ?? ''
     dialogVisible.value = true
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   }
 }
 
 const submitForm = async () => {
-  if (!formRef.value) return
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
+  const errors = await formRef.value?.validate()
+  if (errors) return false
   try {
     if (dialogMode.value === 'create') {
       await saveBrand({ ...form })
-      ElMessage.success('新增成功')
+      Message.success('新增成功')
     } else if (editingId.value !== null) {
       await updateBrand(editingId.value, { ...form })
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     }
     dialogVisible.value = false
     await fetchList()
+    return true
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
+    return false
   }
 }
 
 const handleDelete = async (id: number) => {
   try {
     await deleteBrand(id)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     if (list.value.length === 1 && page.value > 1) {
       page.value -= 1
     }
     await fetchList()
   } catch (err) {
-    ElMessage.error((err as Error).message)
+    Message.error((err as Error).message)
   }
 }
 
-const confirmAndDelete = async (id: number) => {
-  try {
-    await ElMessageBox.confirm(
-      '此操作将删除该品牌。注意：若该品牌下仍关联商品，无法删除。',
-      '确认删除该品牌？',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
-  }
-  await handleDelete(id)
+const confirmAndDelete = (id: number) => {
+  Modal.confirm({
+    title: '确认删除该品牌？',
+    content: '此操作将删除该品牌。注意：若该品牌下仍关联商品，无法删除。',
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: () => handleDelete(id),
+  })
 }
 
-const onSelectionChange = (rows: BrandVO[]) => {
-  selectedRows.value = rows
+const onSelectionChange = (keys: (string | number)[]) => {
+  selectedKeys.value = keys.map((k) => Number(k))
 }
 
-const handleBatchDelete = async () => {
-  const ids = selectedRows.value
-    .map((r) => r.id)
-    .filter((id): id is number => typeof id === 'number')
+const handleBatchDelete = () => {
+  const ids = selectedKeys.value
   if (ids.length === 0) return
-  try {
-    await ElMessageBox.confirm(
-      `即将删除已选的 ${ids.length} 个品牌。品牌下存在商品时无法删除。删除后可通过操作日志撤回`,
-      '批量删除确认',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
-  }
-  try {
-    await batchDeleteBrands(ids)
-    ElMessage.success(`已删除 ${ids.length} 项`)
-    selectedRows.value = []
-    if (list.value.length <= ids.length && page.value > 1) {
-      page.value -= 1
-    }
-    await fetchList()
-  } catch (err) {
-    ElMessage.error((err as Error).message)
-  }
+  Modal.confirm({
+    title: '批量删除确认',
+    content: `即将删除已选的 ${ids.length} 个品牌。品牌下存在商品时无法删除。删除后可通过操作日志撤回`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      try {
+        await batchDeleteBrands(ids)
+        Message.success(`已删除 ${ids.length} 项`)
+        selectedKeys.value = []
+        if (list.value.length <= ids.length && page.value > 1) {
+          page.value -= 1
+        }
+        await fetchList()
+      } catch (err) {
+        Message.error((err as Error).message)
+      }
+    },
+  })
 }
 
 onMounted(() => {
@@ -194,115 +206,104 @@ onMounted(() => {
 </script>
 
 <template>
-  <div :style="{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }">
-    <el-page-header title="返回" content="品牌管理">
-      <template #content>
-        <span><strong>品牌管理</strong></span>
+  <div class="page">
+    <div class="page-head">
+      <div class="page-title">品牌管理</div>
+      <div class="page-subtitle">维护球鞋品牌信息，品牌下存在商品时无法删除</div>
+    </div>
+
+    <FilterBar>
+      <a-input
+        v-model="searchKeyword"
+        class="filter-item"
+        placeholder="搜索品牌名称"
+        allow-clear
+        @input="onSearchInput"
+        @clear="onSearchInput"
+      />
+      <template #actions>
+        <a-button @click="onResetFilters">重置</a-button>
       </template>
-    </el-page-header>
-    <el-text type="info">维护球鞋品牌信息，品牌下存在商品时无法删除</el-text>
-
-    <el-divider />
-
-    <el-row :gutter="16" align="middle" justify="space-between">
-      <el-col :span="16">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索品牌名称"
-          clearable
-          @input="onSearchInput"
-          @clear="onSearchInput"
-        />
-      </el-col>
-    </el-row>
+    </FilterBar>
 
     <div class="batch-toolbar">
-      <el-button
-        v-if="selectedRows.length > 0"
-        type="danger"
-        @click="handleBatchDelete"
-      >
-        批量删除 (已选 {{ selectedRows.length }})
-      </el-button>
-      <el-button
-        v-if="selectedRows.length > 0"
-        link
-        @click="selectedRows = []"
-      >
-        取消选择
-      </el-button>
-      <el-button type="primary" style="margin-left: auto" @click="openCreateDialog">
-        + 新增品牌
-      </el-button>
+      <a-space v-if="selectedKeys.length > 0">
+        <a-button status="danger" @click="handleBatchDelete">
+          批量删除 (已选 {{ selectedKeys.length }})
+        </a-button>
+        <a-button type="text" @click="selectedKeys = []">取消选择</a-button>
+      </a-space>
+      <a-button type="primary" class="create-btn" @click="openCreateDialog">+ 新增品牌</a-button>
     </div>
 
-    <div :style="{ flex: 1, minHeight: 0, marginTop: '16px', display: 'flex', flexDirection: 'column' }">
-      <el-table
-        v-loading="loading"
+    <div class="table-wrap">
+      <a-table
         :data="list"
+        :loading="loading"
         :stripe="true"
-        border
-        height="100%"
-        empty-text="暂无品牌"
+        :bordered="{ cell: true }"
+        :pagination="pagination"
+        row-key="id"
+        :row-selection="rowSelection"
+        :scroll="{ x: '100%', minWidth: 720 }"
+        no-data-element="暂无品牌"
+        @page-change="onPageChange"
+        @page-size-change="onPageSizeChange"
         @selection-change="onSelectionChange"
       >
-      <el-table-column type="selection" width="48" />
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="name" label="品牌名称" min-width="200" />
-      <el-table-column label="创建日期" width="140">
-        <template #default="{ row }">
-          <span>{{ (row as BrandVO).createTime ?? '—' }}</span>
+        <template #columns>
+          <a-table-column title="ID" data-index="id" :width="80" />
+          <a-table-column title="品牌名称" data-index="name" :min-width="200" ellipsis tooltip />
+          <a-table-column title="创建日期" :width="140">
+            <template #cell="{ record }">{{ (record as BrandVO).createTime ?? '—' }}</template>
+          </a-table-column>
+          <a-table-column title="更新日期" :width="140">
+            <template #cell="{ record }">{{ (record as BrandVO).updateTime ?? '—' }}</template>
+          </a-table-column>
+          <a-table-column title="操作" :width="140" fixed="right">
+            <template #cell="{ record }">
+              <a-space :size="4">
+                <a-button type="text" size="small" @click="openEditDialog(record as BrandVO)">编辑</a-button>
+                <a-button
+                  type="text"
+                  status="danger"
+                  size="small"
+                  @click="confirmAndDelete((record as BrandVO).id as number)"
+                >
+                  删除
+                </a-button>
+              </a-space>
+            </template>
+          </a-table-column>
         </template>
-      </el-table-column>
-      <el-table-column label="更新日期" width="140">
-        <template #default="{ row }">
-          <span>{{ (row as BrandVO).updateTime ?? '—' }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openEditDialog(row as BrandVO)">编辑</el-button>
-          <el-button link type="danger" @click="confirmAndDelete((row as BrandVO).id as number)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+      </a-table>
     </div>
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :total="total"
-      :page-sizes="[10, 20, 50]"
-      layout="total, sizes, prev, pager, next, jumper"
-      background
-      style="margin-top: 12px; justify-content: flex-end; display: flex"
-      @current-change="onPageChange"
-      @size-change="onSizeChange"
-    />
-
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="dialogMode === 'create' ? '新增品牌' : '编辑品牌'"
-      width="480px"
+      :width="480"
+      :mask-closable="false"
+      unmount-on-close
+      @before-ok="submitForm"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="品牌名称" prop="name">
-          <el-input v-model="form.name" placeholder="如 Nike" maxlength="255" show-word-limit />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm">提交</el-button>
-      </template>
-    </el-dialog>
+      <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
+        <a-form-item label="品牌名称" field="name">
+          <a-input v-model="form.name" placeholder="如 Nike" :max-length="255" show-word-limit />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <style scoped>
-.batch-toolbar {
+.create-btn {
+  margin-left: auto;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
   margin-top: 16px;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
 }
 </style>

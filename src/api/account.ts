@@ -1,5 +1,5 @@
 import http from './http'
-import type { AccountRequest, AccountVO, PageResult } from '../types/api'
+import type { AccountRequest, UserVO, PageResult } from '../types/api'
 
 export interface AccountSearchParams {
   username?: string
@@ -10,11 +10,11 @@ export interface AccountSearchParams {
   pageSize?: number
 }
 
-export const searchAccounts = (params: AccountSearchParams): Promise<PageResult<AccountVO>> =>
-  http.get<PageResult<AccountVO>, PageResult<AccountVO>>('/account/search', { params })
+export const searchAccounts = (params: AccountSearchParams): Promise<PageResult<UserVO>> =>
+  http.get<PageResult<UserVO>, PageResult<UserVO>>('/account/search', { params })
 
-export const getAccount = (id: number): Promise<AccountVO> =>
-  http.get<AccountVO, AccountVO>(`/account/info/${id}`)
+export const getAccount = (id: number): Promise<UserVO> =>
+  http.get<UserVO, UserVO>(`/account/info/${id}`)
 
 export const saveAccount = (req: AccountRequest): Promise<number> =>
   http.post<number, number>('/account/save', req)
