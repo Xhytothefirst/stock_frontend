@@ -198,13 +198,13 @@ onMounted(async () => {
         :bordered="{ cell: true }"
         :pagination="pagination"
         row-key="id"
-        :scroll="{ x: '100%', minWidth: 1100 }"
+        :scroll="{ x: '100%', minWidth: 1160 }"
         no-data-element="暂无操作日志"
         @page-change="onPageChange"
         @page-size-change="onPageSizeChange"
       >
         <template #columns>
-          <a-table-column title="操作时间" :width="140">
+          <a-table-column title="操作时间" :width="200">
             <template #cell="{ record }">{{ operationTimeText(record as OperationLogVO) }}</template>
           </a-table-column>
           <a-table-column title="操作类型" :width="120">

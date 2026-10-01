@@ -58,6 +58,7 @@ const searchTimer = ref<number | null>(null)
 const rowSelection = computed(() => ({
   type: 'checkbox' as const,
   showCheckedAll: true,
+  selectedRowKeys: selectedKeys.value,
 }))
 
 // 货号相似商品查询（仅新增模式）
@@ -552,7 +553,7 @@ onMounted(async () => {
         :pagination="pagination"
         row-key="id"
         :row-selection="rowSelection"
-        :scroll="{ x: '100%', minWidth: 1200 }"
+        :scroll="{ x: '100%', minWidth: 1280 }"
         no-data-element="暂无入库记录"
         @page-change="onPageChange"
         @page-size-change="onPageSizeChange"
@@ -601,7 +602,7 @@ onMounted(async () => {
               </a-tag>
             </template>
           </a-table-column>
-          <a-table-column title="入库日期" :width="120">
+          <a-table-column title="入库日期" :width="200">
             <template #cell="{ record }">{{ (record as ProductVO).createTime ?? '—' }}</template>
           </a-table-column>
           <a-table-column title="操作" :width="180" fixed="right">

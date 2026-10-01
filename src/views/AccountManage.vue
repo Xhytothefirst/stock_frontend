@@ -264,13 +264,12 @@ onMounted(() => {
         :bordered="{ cell: true }"
         :pagination="pagination"
         row-key="id"
-        :scroll="{ x: '100%', minWidth: 900 }"
+        :scroll="{ x: '100%', minWidth: 860 }"
         no-data-element="暂无账号"
         @page-change="onPageChange"
         @page-size-change="onPageSizeChange"
       >
         <template #columns>
-          <a-table-column title="ID" data-index="id" :width="80" />
           <a-table-column title="用户名" data-index="username" :min-width="120" ellipsis tooltip />
           <a-table-column title="姓名" data-index="fullName" :min-width="120" ellipsis tooltip />
           <a-table-column title="角色" :min-width="180">
@@ -293,7 +292,7 @@ onMounted(() => {
               </a-tag>
             </template>
           </a-table-column>
-          <a-table-column title="创建时间" :width="160">
+          <a-table-column title="创建时间" :width="200">
             <template #cell="{ record }">{{ (record as UserVO).createTime ?? '—' }}</template>
           </a-table-column>
           <a-table-column title="操作" :width="140" fixed="right">

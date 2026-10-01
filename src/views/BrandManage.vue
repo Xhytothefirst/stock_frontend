@@ -28,6 +28,7 @@ const searchTimer = ref<number | null>(null)
 const rowSelection = computed(() => ({
   type: 'checkbox' as const,
   showCheckedAll: true,
+  selectedRowKeys: selectedKeys.value,
 }))
 
 const dialogVisible = ref(false)
@@ -245,19 +246,18 @@ onMounted(() => {
         :pagination="pagination"
         row-key="id"
         :row-selection="rowSelection"
-        :scroll="{ x: '100%', minWidth: 720 }"
+        :scroll="{ x: '100%', minWidth: 760 }"
         no-data-element="暂无品牌"
         @page-change="onPageChange"
         @page-size-change="onPageSizeChange"
         @selection-change="onSelectionChange"
       >
         <template #columns>
-          <a-table-column title="ID" data-index="id" :width="80" />
           <a-table-column title="品牌名称" data-index="name" :min-width="200" ellipsis tooltip />
-          <a-table-column title="创建日期" :width="140">
+          <a-table-column title="创建日期" :width="200">
             <template #cell="{ record }">{{ (record as BrandVO).createTime ?? '—' }}</template>
           </a-table-column>
-          <a-table-column title="更新日期" :width="140">
+          <a-table-column title="更新日期" :width="200">
             <template #cell="{ record }">{{ (record as BrandVO).updateTime ?? '—' }}</template>
           </a-table-column>
           <a-table-column title="操作" :width="140" fixed="right">

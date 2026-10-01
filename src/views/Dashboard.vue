@@ -316,7 +316,11 @@ watch(activeTrend, (value) => {
     </a-card>
 
     <div class="trend-row">
-      <a-card class="trend-card" :bordered="false">
+      <a-card
+        class="trend-card"
+        :bordered="false"
+        :body-style="{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }"
+      >
         <template #title>
           <div class="card-title-row">
             <div>
@@ -330,9 +334,18 @@ watch(activeTrend, (value) => {
             </a-radio-group>
           </div>
         </template>
-        <a-spin :loading="loadingTrend" class="trend-spin">
+        <a-spin
+          :loading="loadingTrend"
+          :style="{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }"
+        >
           <div class="trend-grid">
-            <a-card v-for="item in trendMetrics" :key="item.title" class="trend-item">
+            <a-card
+              v-for="item in trendMetrics"
+              :key="item.title"
+              class="trend-item"
+              :style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }"
+              :body-style="{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }"
+            >
               <template #title>
                 <div class="trend-item-head">
                   <span class="trend-item-title">{{ item.title }}</span>
@@ -353,8 +366,16 @@ watch(activeTrend, (value) => {
         </a-spin>
       </a-card>
 
-      <a-card class="distribution-card" :bordered="false" title="成本价位分布">
-        <a-spin :loading="loadingDistribution" class="distribution-spin">
+      <a-card
+        class="distribution-card"
+        :bordered="false"
+        title="成本价位分布"
+        :body-style="{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }"
+      >
+        <a-spin
+          :loading="loadingDistribution"
+          :style="{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }"
+        >
           <div class="distribution-body">
             <VueUiDonut
               v-if="distributionDataset.length > 0"
@@ -450,21 +471,11 @@ watch(activeTrend, (value) => {
   flex-direction: column;
 }
 
-.trend-card :deep(.arco-card-body) {
-  flex: 1;
-  min-height: 0;
-}
-
 .distribution-card {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-}
-
-.distribution-card :deep(.arco-card-body) {
-  flex: 1;
-  min-height: 0;
 }
 
 .card-title-row {
@@ -486,15 +497,12 @@ watch(activeTrend, (value) => {
   font-size: 12px;
 }
 
-.trend-spin,
-.distribution-spin {
-  display: block;
-  width: 100%;
-}
-
 .trend-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: minmax(min-content, 1fr);
   gap: 12px;
 }
 
@@ -525,14 +533,15 @@ watch(activeTrend, (value) => {
 }
 
 .trend-chart {
-  height: 150px;
+  flex: 1;
+  min-height: 150px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .distribution-body {
-  height: 100%;
+  flex: 1;
   min-height: 220px;
   display: flex;
   align-items: center;

@@ -29,6 +29,7 @@ const searchTimer = ref<number | null>(null)
 const rowSelection = computed(() => ({
   type: 'checkbox' as const,
   showCheckedAll: true,
+  selectedRowKeys: selectedKeys.value,
 }))
 
 const dialogVisible = ref(false)
@@ -264,14 +265,13 @@ onMounted(() => {
         :pagination="pagination"
         row-key="id"
         :row-selection="rowSelection"
-        :scroll="{ x: '100%', minWidth: 760 }"
+        :scroll="{ x: '100%', minWidth: 720 }"
         no-data-element="暂无角色"
         @page-change="onPageChange"
         @page-size-change="onPageSizeChange"
         @selection-change="onSelectionChange"
       >
         <template #columns>
-          <a-table-column title="ID" data-index="id" :width="80" />
           <a-table-column title="角色名称" data-index="name" :min-width="160" ellipsis tooltip />
           <a-table-column title="角色描述" :min-width="200">
             <template #cell="{ record }">{{ (record as RoleVO).description || '—' }}</template>
@@ -279,7 +279,7 @@ onMounted(() => {
           <a-table-column title="用户数量" :width="100">
             <template #cell="{ record }">{{ (record as RoleVO).userCount ?? 0 }}</template>
           </a-table-column>
-          <a-table-column title="创建日期" :width="160">
+          <a-table-column title="创建日期" :width="200">
             <template #cell="{ record }">{{ (record as RoleVO).createTime ?? '—' }}</template>
           </a-table-column>
           <a-table-column title="操作" :width="140" fixed="right">
