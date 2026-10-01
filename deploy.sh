@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROJECT_PATH="/home/xray/projects/stock-frontend"
+PROJECT_PATH="/home/xray/projects/stock_frontend"
 
 cd $PROJECT_PATH
 git pull
